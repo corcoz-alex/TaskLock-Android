@@ -3,6 +3,7 @@ package com.corcozalex.tasklock.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.corcozalex.tasklock.network.NetworkClient
+import com.corcozalex.tasklock.network.Task
 import com.corcozalex.tasklock.network.UserProfile
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -11,7 +12,7 @@ import kotlinx.coroutines.launch
 
 sealed class DashboardState {
     object Loading : DashboardState()
-    data class Success(val userProfile: UserProfile) : DashboardState()
+    data class Success(val userProfile: UserProfile, val tasks: List<Task>) : DashboardState()
     data class Error(val error: String) : DashboardState()
 }
 
@@ -25,11 +26,12 @@ class DashboardViewModel : ViewModel() {
     }
 
     private fun fetchUserProfile() {
+        _uiState.value = DashboardState.Loading
         viewModelScope.launch {
             try {
                 val profile = NetworkClient.api.getMyProfile()
-
-                _uiState.value = DashboardState.Success(profile)
+                val taskList = NetworkClient.api.getTasks()
+                _uiState.value = DashboardState.Success(profile, taskList)
             } catch (e: Exception) {
                 _uiState.value = DashboardState.Error(e.message ?: "Failed to load profile. Are you sure the token is valid?")
             }
