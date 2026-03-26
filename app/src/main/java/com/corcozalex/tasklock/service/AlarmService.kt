@@ -9,10 +9,9 @@ import android.content.Intent
 import android.media.AudioAttributes
 import android.media.MediaPlayer
 import android.os.IBinder
-import android.os.PowerManager
 import android.provider.Settings
 import androidx.core.app.NotificationCompat
-import com.corcozalex.tasklock.MainActivity
+import com.corcozalex.tasklock.AlarmActivity
 
 class AlarmService : Service(){
     private var mediaPlayer: MediaPlayer? = null
@@ -33,7 +32,7 @@ class AlarmService : Service(){
         }
         notificationManager.createNotificationChannel(channel)
 
-        val fullScreenIntent = Intent(this, MainActivity::class.java).apply {
+        val fullScreenIntent = Intent(this, AlarmActivity::class.java).apply {
             action = "ALARM_WAKE_UP_${System.currentTimeMillis()}"
             putExtra("IS_ALARM_TRIGGERED", true)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
@@ -55,12 +54,14 @@ class AlarmService : Service(){
             .setPriority(NotificationCompat.PRIORITY_MAX)
             .setCategory(NotificationCompat.CATEGORY_ALARM)
             .setVisibility(NotificationCompat.VISIBILITY_PUBLIC) // Make the notification public
+            .setContentIntent(fullScreenPendingIntent)
             .setFullScreenIntent(fullScreenPendingIntent, true)
             .setOngoing(true)
             .build()
 
         playAlarmSound()
         startForeground(1, notification)
+
 
         return START_STICKY
     }
