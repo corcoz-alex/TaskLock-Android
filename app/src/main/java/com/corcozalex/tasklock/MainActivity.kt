@@ -1,7 +1,11 @@
 package com.corcozalex.tasklock
 
+import android.app.KeyguardManager
+import android.content.Context
+import android.content.Intent
+import android.os.Build
 import android.os.Bundle
-import android.util.Log
+import android.view.WindowManager
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
@@ -26,6 +30,8 @@ import androidx.navigation.compose.rememberNavController
 import com.corcozalex.tasklock.network.NetworkClient
 import com.corcozalex.tasklock.network.TokenManager
 import com.corcozalex.tasklock.network.dataStore
+import com.corcozalex.tasklock.service.AlarmService
+import com.corcozalex.tasklock.ui.screens.AlarmActiveScreen
 import com.corcozalex.tasklock.ui.screens.DashboardScreen
 import com.corcozalex.tasklock.ui.screens.LoginScreen
 import com.corcozalex.tasklock.ui.screens.RegisterScreen
@@ -33,12 +39,30 @@ import com.corcozalex.tasklock.ui.theme.TaskLockTheme
 import com.corcozalex.tasklock.viewmodel.AuthState
 import com.corcozalex.tasklock.viewmodel.AuthViewModel
 import com.corcozalex.tasklock.viewmodel.DashboardViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
 
 class MainActivity : ComponentActivity() {
+
+    // --- THE COMPOSE BRIDGE ---
+    // This state acts as the master switch. When it turns true, Compose instantly navigates.
+    private val alarmTriggerState = MutableStateFlow(false)
+
+    // --- CATCH BACKGROUND INTENTS ---
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent) // Update the static intent
+        handleAlarmIntent(intent) // Process the wake-up
+    }
+
+    // --- CATCH COLD-START INTENTS ---
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         NetworkClient.initialize(applicationContext)
         enableEdgeToEdge()
+
+        // Check if the app was launched by the AlarmService
+        handleAlarmIntent(intent)
+
         setContent {
             TaskLockTheme {
                 Surface(
@@ -52,53 +76,77 @@ class MainActivity : ComponentActivity() {
                     val context = LocalContext.current
                     val tokenManager = remember { TokenManager(context.dataStore) }
 
-                    NavHost(navController = navController, startDestination = "splash") {
+                    // --- REACT TO THE ALARM STATE ---
+                    val isAlarmTriggered by alarmTriggerState.collectAsState()
 
-                        // ROUTE A: The Traffic Cop (Splash)
+                    LaunchedEffect(isAlarmTriggered) {
+                        if (isAlarmTriggered) {
+                            navController.navigate("alarm_active") {
+                                // Wipe the backstack so the user cannot swipe away from the alarm
+                                popUpTo(navController.graph.id) { inclusive = true }
+                            }
+                        }
+                    }
+
+                    // Dynamically set start destination to avoid flashing the splash screen during an alarm
+                    val initialRoute = if (isAlarmTriggered) "alarm_active" else "splash"
+
+                    NavHost(navController = navController, startDestination = initialRoute) {
+
+                        // ROUTE: Alarm Screen
+                        composable("alarm_active") {
+                            AlarmActiveScreen (
+                                onEmergencyStop = {
+                                    // 1. Kill the audio
+                                    val stopIntent = Intent(context, AlarmService::class.java)
+                                    context.stopService(stopIntent)
+
+                                    // 2. Clear the screen flags so the phone can sleep again
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1){
+                                        setShowWhenLocked(false)
+                                        setTurnScreenOn(false)
+                                    }
+                                    window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+
+                                    // 3. Reset the master switch and intent so it doesn't loop
+                                    intent?.removeExtra("IS_ALARM_TRIGGERED")
+                                    alarmTriggerState.value = false
+
+                                    // 4. Navigate back to safety
+                                    navController.navigate("dashboard") {
+                                        popUpTo("alarm_active") { inclusive = true }
+                                    }
+                                }
+                            )
+                        }
+
+                        // ROUTE: The Traffic Cop (Splash)
                         composable("splash") {
-                            // Read the vault
                             val storedToken by tokenManager.getToken.collectAsState(initial = "CHECKING_VAULT")
-
                             LaunchedEffect(storedToken) {
                                 if (storedToken != "CHECKING_VAULT") {
                                     if (storedToken.isNullOrBlank()) {
-                                        // Vault is empty -> Go to Login
-                                        navController.navigate("login") {
-                                            popUpTo("splash") { inclusive = true }
-                                        }
+                                        navController.navigate("login") { popUpTo("splash") { inclusive = true } }
                                     } else {
-                                        // Token found! -> Go to Dashboard
-                                        navController.navigate("dashboard") {
-                                            popUpTo("splash") { inclusive = true }
-                                        }
+                                        navController.navigate("dashboard") { popUpTo("splash") { inclusive = true } }
                                     }
                                 }
                             }
-
                             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                CircularProgressIndicator(
-                                    modifier = Modifier.size(48.dp),
-                                    color = MaterialTheme.colorScheme.primary,
-                                    strokeWidth = 4.dp
-                                )
+                                CircularProgressIndicator(modifier = Modifier.size(48.dp), color = MaterialTheme.colorScheme.primary, strokeWidth = 4.dp)
                             }
                         }
 
-                        // ROUTE B: Login
+                        // ROUTE: Login
                         composable("login") {
                             LaunchedEffect(currentAuthState) {
                                 if (currentAuthState is AuthState.Success) {
-                                    navController.navigate("dashboard") {
-                                        popUpTo("login") { inclusive = true }
-                                    }
+                                    navController.navigate("dashboard") { popUpTo("login") { inclusive = true } }
                                 }
                             }
-
                             LoginScreen(
                                 authState = currentAuthState,
-                                onLoginClick = { email, password ->
-                                    authViewModel.login(email, password)
-                                },
+                                onLoginClick = { email, password -> authViewModel.login(email, password) },
                                 onNavigateToRegister = {
                                     navController.navigate("register")
                                     authViewModel.logout()
@@ -106,33 +154,31 @@ class MainActivity : ComponentActivity() {
                             )
                         }
 
-                        // ROUTE C: Dashboard
+                        // ROUTE: Dashboard
                         composable("dashboard") {
-                            // 1. Create the new brain for the dashboard
-                            val dashboardViewModel: com.corcozalex.tasklock.viewmodel.DashboardViewModel = viewModel()
-
-                            // 2. Listen to the brain's state
+                            val dashboardViewModel: DashboardViewModel = viewModel()
                             val dashboardState by dashboardViewModel.uiState.collectAsState()
 
-                            // 3. Pass the state into the UI
                             DashboardScreen(
                                 uiState = dashboardState,
                                 onLogoutClick = {
                                     authViewModel.logout()
-                                    navController.navigate("login") {
-                                        popUpTo("dashboard") { inclusive = true }
-                                    }
-                                }
+                                    navController.navigate("login") { popUpTo("dashboard") { inclusive = true } }
+                                },
+                                onCreateTaskClick = { title, description -> dashboardViewModel.createTask(title, description) },
+                                onToggleTaskClick = { task -> dashboardViewModel.toggleTaskCompletion(task) },
+                                onDeleteTaskClick = { taskId -> dashboardViewModel.deleteTask(taskId) },
+                                onTestAlarmClick = { dashboardViewModel.scheduleTestAlarm(context) }
                             )
                         }
+
+                        // ROUTE: Register
                         composable("register"){
                             RegisterScreen(
                                 authState = currentAuthState,
-                                onRegisterClick = { email, password ->
-                                    authViewModel.register(email, password)
-                                },
+                                onRegisterClick = { email, password -> authViewModel.register(email, password) },
                                 onNavigateToLogin = {
-                                    navController.popBackStack() // Go back to login
+                                    navController.popBackStack()
                                     authViewModel.logout()
                                 }
                             )
@@ -140,6 +186,33 @@ class MainActivity : ComponentActivity() {
                     }
                 }
             }
+        }
+    }
+
+    // --- THE WAKE-UP ENGINE ---
+    private fun handleAlarmIntent(intent: Intent?) {
+        if (intent?.getBooleanExtra("IS_ALARM_TRIGGERED", false) == true) {
+
+            // 1. Tell Compose to change the UI
+            alarmTriggerState.value = true
+
+            // 2. Physically hijack the screen panel
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                setShowWhenLocked(true)
+                setTurnScreenOn(true)
+
+                // Aggressively ask the OS to dismiss the lock screen
+                val keyguardManager = getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
+                keyguardManager.requestDismissKeyguard(this, null)
+            } else {
+                @Suppress("DEPRECATION")
+                window.addFlags(
+                    WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                            WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
+                )
+            }
+            // 3. Keep the screen awake so the user can use the camera
+            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         }
     }
 }
