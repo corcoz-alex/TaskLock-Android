@@ -12,6 +12,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.corcozalex.tasklock.network.RepeatMode
 import com.corcozalex.tasklock.network.Task
 import com.corcozalex.tasklock.ui.components.CreateTaskDialog
 import com.corcozalex.tasklock.ui.components.TaskCard
@@ -21,8 +22,7 @@ import com.corcozalex.tasklock.viewmodel.DashboardState
 fun DashboardScreen(
     uiState: DashboardState,
     onLogoutClick: () -> Unit,
-    // NEW: We pass the ViewModel actions directly from MainActivity
-    onCreateTaskClick: (String, String) -> Unit,
+    onCreateTaskClick: (String, String, Long, RepeatMode, Int?, String) -> Unit,
     onToggleTaskClick: (Task) -> Unit,
     onDeleteTaskClick: (Int) -> Unit,
     onTestAlarmClick: () -> Unit
@@ -113,8 +113,7 @@ fun DashboardScreen(
                                 items(tasks) { task ->
                                     TaskCard(
                                         task = task,
-                                        // WIRED: Connect the card to our new parameters
-                                        onToggleCompletion = { onToggleTaskClick(task) },
+                                        onToggleEnabled = { onToggleTaskClick(task) },
                                         onDeleteClick = { onDeleteTaskClick(task.id) }
                                     )
                                 }
@@ -145,9 +144,16 @@ fun DashboardScreen(
             if (showCreateDialog) {
                 CreateTaskDialog(
                     onDismiss = { showCreateDialog = false },
-                    onConfirm = { title, description ->
+                    onConfirm = { title, description, scheduledAtMillis, repeatMode, repeatDayOfWeek, requiredObject ->
                         showCreateDialog = false
-                        onCreateTaskClick(title, description)
+                        onCreateTaskClick(
+                            title,
+                            description,
+                            scheduledAtMillis,
+                            repeatMode,
+                            repeatDayOfWeek,
+                            requiredObject
+                        )
                     }
                 )
             }

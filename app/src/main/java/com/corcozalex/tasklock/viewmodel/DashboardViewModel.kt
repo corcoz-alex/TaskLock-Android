@@ -12,8 +12,10 @@ import androidx.core.app.NotificationManagerCompat
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.corcozalex.tasklock.network.NetworkClient
+import com.corcozalex.tasklock.network.RepeatMode
 import com.corcozalex.tasklock.network.Task
 import com.corcozalex.tasklock.network.TaskCreateRequest
+import com.corcozalex.tasklock.network.TaskMetadataCodec
 import com.corcozalex.tasklock.network.UserProfile
 import com.corcozalex.tasklock.receiver.AlarmReceiver
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -50,11 +52,24 @@ class DashboardViewModel : ViewModel() {
         }
     }
 
-    fun createTask(title: String, description: String) {
+    fun createTask(
+        title: String,
+        description: String,
+        scheduledAtMillis: Long,
+        repeatMode: RepeatMode,
+        repeatDayOfWeek: Int?,
+        requiredObject: String
+    ) {
         _uiState.value = DashboardState.Loading
         viewModelScope.launch {
             try{
-                val descToSave = if (description.isNotBlank()) description else null
+                val descToSave = TaskMetadataCodec.encode(
+                    notes = description,
+                    scheduledAtMillis = scheduledAtMillis,
+                    repeatMode = repeatMode,
+                    repeatDayOfWeek = repeatDayOfWeek,
+                    requiredObject = requiredObject
+                )
                 val request = TaskCreateRequest(title = title, description = descToSave)
                 NetworkClient.api.createTask(request)
                 fetchUserProfile()

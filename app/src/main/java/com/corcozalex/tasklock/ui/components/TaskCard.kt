@@ -11,11 +11,10 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Checkbox
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.SegmentedButtonDefaults.Icon
+import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -23,21 +22,54 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import com.corcozalex.tasklock.network.RepeatMode
 import com.corcozalex.tasklock.network.Task
+import com.corcozalex.tasklock.network.TaskMetadataCodec
+import java.text.SimpleDateFormat
+import java.util.Calendar
+import java.util.Date
+import java.util.Locale
 
 @Composable
 fun TaskCard(
     task: Task,
-    onToggleCompletion: (Boolean) -> Unit,
+    onToggleEnabled: () -> Unit,
     onDeleteClick: () -> Unit
 ) {
+    val metadata = TaskMetadataCodec.decode(task.description)
+    val notes = TaskMetadataCodec.plainDescription(task.description)
+    val isEnabled = !task.is_completed
+
+    val scheduleText = metadata?.let {
+        val date = SimpleDateFormat("EEE, MMM d", Locale.getDefault()).format(Date(it.scheduledAtMillis))
+        val time = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(it.scheduledAtMillis))
+        val repeatSummary = when (it.repeatMode) {
+            RepeatMode.NONE -> "Once"
+            RepeatMode.DAILY -> "Daily"
+            RepeatMode.WEEKLY -> {
+                val dayName = when (it.repeatDayOfWeek) {
+                    Calendar.SUNDAY -> "Sunday"
+                    Calendar.MONDAY -> "Monday"
+                    Calendar.TUESDAY -> "Tuesday"
+                    Calendar.WEDNESDAY -> "Wednesday"
+                    Calendar.THURSDAY -> "Thursday"
+                    Calendar.FRIDAY -> "Friday"
+                    Calendar.SATURDAY -> "Saturday"
+                    else -> "Weekly"
+                }
+                "Every $dayName"
+            }
+        }
+        "$date at $time - $repeatSummary"
+    }
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
         colors = CardDefaults.cardColors(
-            containerColor = if (task.is_completed) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surface
+            containerColor = if (!isEnabled) MaterialTheme.colorScheme.surfaceVariant else MaterialTheme.colorScheme.surface
         )
     ) {
         Row(
@@ -46,25 +78,37 @@ fun TaskCard(
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Checkbox(
-                checked = task.is_completed,
-                onCheckedChange = onToggleCompletion
-            )
+            Switch(checked = isEnabled, onCheckedChange = { onToggleEnabled() })
             Spacer(modifier = Modifier.width(8.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     text = task.title,
                     style = MaterialTheme.typography.titleMedium,
-                    // Dynamically strike through the text if completed
-                    textDecoration = if (task.is_completed) TextDecoration.LineThrough else TextDecoration.None,
-                    color = if (task.is_completed) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
+                    textDecoration = if (!isEnabled) TextDecoration.LineThrough else TextDecoration.None,
+                    color = if (!isEnabled) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface
                 )
-                if (!task.description.isNullOrBlank()) {
+                if (!scheduleText.isNullOrBlank()) {
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = task.description,
+                        text = scheduleText,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.primary
+                    )
+                }
+                if (metadata != null) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "Object: ${metadata.requiredObject}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                if (!notes.isNullOrBlank()) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = notes,
                         style = MaterialTheme.typography.bodyMedium,
-                        maxLines = 2, // Prevent massive descriptions from breaking the UI
+                        maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

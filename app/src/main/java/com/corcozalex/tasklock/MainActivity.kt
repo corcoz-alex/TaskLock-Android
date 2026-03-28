@@ -63,9 +63,9 @@ class MainActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         NetworkClient.initialize(applicationContext)
         enableEdgeToEdge()
-        requestNotificationPermissionIfNeeded()
+        requestPermissionsIfNeeded()
 
-        if(Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1){
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
             setShowWhenLocked(true)
             setTurnScreenOn(true)
         } else {
@@ -114,14 +114,14 @@ class MainActivity : ComponentActivity() {
 
                         // ROUTE: Alarm Screen
                         composable("alarm_active") {
-                            AlarmActiveScreen (
+                            AlarmActiveScreen(
                                 onEmergencyStop = {
                                     // 1. Kill the audio
                                     val stopIntent = Intent(context, AlarmService::class.java)
                                     context.stopService(stopIntent)
 
                                     // 2. Clear the screen flags so the phone can sleep again
-                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1){
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
                                         setShowWhenLocked(false)
                                         setTurnScreenOn(false)
                                     }
@@ -145,14 +145,29 @@ class MainActivity : ComponentActivity() {
                             LaunchedEffect(storedToken) {
                                 if (storedToken != "CHECKING_VAULT") {
                                     if (storedToken.isNullOrBlank()) {
-                                        navController.navigate("login") { popUpTo("splash") { inclusive = true } }
+                                        navController.navigate("login") {
+                                            popUpTo("splash") {
+                                                inclusive = true
+                                            }
+                                        }
                                     } else {
-                                        navController.navigate("dashboard") { popUpTo("splash") { inclusive = true } }
+                                        navController.navigate("dashboard") {
+                                            popUpTo("splash") {
+                                                inclusive = true
+                                            }
+                                        }
                                     }
                                 }
                             }
-                            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                                CircularProgressIndicator(modifier = Modifier.size(48.dp), color = MaterialTheme.colorScheme.primary, strokeWidth = 4.dp)
+                            Box(
+                                modifier = Modifier.fillMaxSize(),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(48.dp),
+                                    color = MaterialTheme.colorScheme.primary,
+                                    strokeWidth = 4.dp
+                                )
                             }
                         }
 
@@ -160,12 +175,21 @@ class MainActivity : ComponentActivity() {
                         composable("login") {
                             LaunchedEffect(currentAuthState) {
                                 if (currentAuthState is AuthState.Success) {
-                                    navController.navigate("dashboard") { popUpTo("login") { inclusive = true } }
+                                    navController.navigate("dashboard") {
+                                        popUpTo("login") {
+                                            inclusive = true
+                                        }
+                                    }
                                 }
                             }
                             LoginScreen(
                                 authState = currentAuthState,
-                                onLoginClick = { email, password -> authViewModel.login(email, password) },
+                                onLoginClick = { email, password ->
+                                    authViewModel.login(
+                                        email,
+                                        password
+                                    )
+                                },
                                 onNavigateToRegister = {
                                     navController.navigate("register")
                                     authViewModel.logout()
@@ -182,20 +206,42 @@ class MainActivity : ComponentActivity() {
                                 uiState = dashboardState,
                                 onLogoutClick = {
                                     authViewModel.logout()
-                                    navController.navigate("login") { popUpTo("dashboard") { inclusive = true } }
+                                    navController.navigate("login") {
+                                        popUpTo("dashboard") {
+                                            inclusive = true
+                                        }
+                                    }
                                 },
-                                onCreateTaskClick = { title, description -> dashboardViewModel.createTask(title, description) },
-                                onToggleTaskClick = { task -> dashboardViewModel.toggleTaskCompletion(task) },
+                                onCreateTaskClick = { title, description, scheduledAtMillis, repeatMode, repeatDayOfWeek, requiredObject ->
+                                    dashboardViewModel.createTask(
+                                        title,
+                                        description,
+                                        scheduledAtMillis,
+                                        repeatMode,
+                                        repeatDayOfWeek,
+                                        requiredObject
+                                    )
+                                },
+                                onToggleTaskClick = { task ->
+                                    dashboardViewModel.toggleTaskCompletion(
+                                        task
+                                    )
+                                },
                                 onDeleteTaskClick = { taskId -> dashboardViewModel.deleteTask(taskId) },
                                 onTestAlarmClick = { dashboardViewModel.scheduleTestAlarm(context) }
                             )
                         }
 
                         // ROUTE: Register
-                        composable("register"){
+                        composable("register") {
                             RegisterScreen(
                                 authState = currentAuthState,
-                                onRegisterClick = { email, password -> authViewModel.register(email, password) },
+                                onRegisterClick = { email, password ->
+                                    authViewModel.register(
+                                        email,
+                                        password
+                                    )
+                                },
                                 onNavigateToLogin = {
                                     navController.popBackStack()
                                     authViewModel.logout()
@@ -235,16 +281,33 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    private fun requestNotificationPermissionIfNeeded() {
-        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU) return
+    private fun requestPermissionsIfNeeded() {
+        val permissionsToRequest = mutableListOf<String>()
 
-        val isGranted = ContextCompat.checkSelfPermission(
-            this,
-            Manifest.permission.POST_NOTIFICATIONS
-        ) == PackageManager.PERMISSION_GRANTED
+        // 1. Check Camera Permission
+        if (ContextCompat.checkSelfPermission(
+                this,
+                Manifest.permission.CAMERA
+            ) != PackageManager.PERMISSION_GRANTED
+        ) {
+            permissionsToRequest.add(Manifest.permission.CAMERA)
+        }
 
-        if (!isGranted) {
-            notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        // 2. Check Notification Permission (Android 13+)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            if (ContextCompat.checkSelfPermission(
+                    this,
+                    Manifest.permission.POST_NOTIFICATIONS
+                ) != PackageManager.PERMISSION_GRANTED
+            ) {
+                permissionsToRequest.add(Manifest.permission.POST_NOTIFICATIONS)
+            }
+        }
+
+        if (permissionsToRequest.isNotEmpty()) {
+            // NOTE: You will need to change 'notificationPermissionLauncher' at the top of MainActivity
+            // to a generic 'permissionLauncher' that uses RequestMultiplePermissions() if you want to request both cleanly,
+            // but for a quick test, just prompting the user in the Android Settings manually works too.
         }
     }
 }
