@@ -6,7 +6,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
@@ -89,7 +88,7 @@ fun LoginScreen(
             is AuthState.Success -> {
                 Text(
                     text = authState.message,
-                    color = Color(0xFF4CAF50),
+                    color = MaterialTheme.colorScheme.tertiary,
                     modifier = Modifier.padding(top = 8.dp)
                 )
             }

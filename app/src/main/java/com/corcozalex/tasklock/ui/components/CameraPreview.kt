@@ -25,6 +25,7 @@ import java.io.File
 @Composable
 fun CameraPreview(
     modifier: Modifier = Modifier,
+    lensFacing: Int = CameraSelector.LENS_FACING_BACK,
     captureRequest: Int = 0,
     onCaptureStarted: () -> Unit = {},
     onPhotoCaptured: (String) -> Unit = {},
@@ -47,7 +48,7 @@ fun CameraPreview(
         }
     }
 
-    DisposableEffect(lifecycleOwner, previewView) {
+    DisposableEffect(lifecycleOwner, previewView, lensFacing) {
         val executor = ContextCompat.getMainExecutor(context)
         val cameraBindTask = Runnable {
             try {
@@ -58,18 +59,21 @@ fun CameraPreview(
                 val imageCaptureUseCase = ImageCapture.Builder()
                     .setCaptureMode(ImageCapture.CAPTURE_MODE_MINIMIZE_LATENCY)
                     .build()
+                val cameraSelector = CameraSelector.Builder()
+                    .requireLensFacing(lensFacing)
+                    .build()
 
                 cameraProvider.unbindAll()
                 cameraProvider.bindToLifecycle(
                     lifecycleOwner,
-                    CameraSelector.DEFAULT_BACK_CAMERA,
+                    cameraSelector,
                     preview,
                     imageCaptureUseCase
                 )
                 imageCapture = imageCaptureUseCase
             } catch (e: Exception) {
                 Log.e("CameraPreview", "Camera binding failed", e)
-                onCameraError("Camera failed to start. Please retry.")
+                onCameraError("Camera failed to start with selected lens.")
             }
         }
 

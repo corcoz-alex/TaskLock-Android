@@ -1,41 +1,46 @@
 package com.corcozalex.tasklock.network
 
 import android.content.Context
-import android.util.Log
-import androidx.datastore.core.DataStore
-import androidx.datastore.preferences.core.Preferences
-import androidx.datastore.preferences.core.edit
-import androidx.datastore.preferences.core.stringPreferencesKey
-import androidx.datastore.preferences.preferencesDataStore
-import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.map
+import androidx.security.crypto.EncryptedSharedPreferences
+import androidx.security.crypto.MasterKey
+import androidx.core.content.edit
 
-// The vault file creator stays outside
-val Context.dataStore by preferencesDataStore(name = "auth_prefs")
+@Suppress("DEPRECATION")
+class TokenManager(context: Context) {
 
-class TokenManager(private val dataStore: DataStore<Preferences>) {
+    // 1. Generate the Master Key locked in the Android Keystore hardware
+    private val masterKey = MasterKey.Builder(context)
+        .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
+        .build()
+
+    // 2. Create the encrypted XML file
+    private val sharedPreferences = EncryptedSharedPreferences.create(
+        context,
+        "secure_auth_prefs",
+        masterKey,
+        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM
+    )
 
     companion object {
-        val JWT_TOKEN_KEY = stringPreferencesKey("jwt_token")
+        private const val KEY_ACCESS_TOKEN = "access_token"
+        private const val KEY_REFRESH_TOKEN = "refresh_token"
     }
 
-    suspend fun saveToken(token: String) {
-        dataStore.edit { preferences ->
-            preferences[JWT_TOKEN_KEY] = token
-            Log.d("VaultTest", "ACTION: Saved Token -> ${token.take(15)}...")
+    // Save both tokens asynchronously
+    fun saveTokens(accessToken: String, refreshToken: String) {
+        sharedPreferences.edit {
+            putString(KEY_ACCESS_TOKEN, accessToken)
+                .putString(KEY_REFRESH_TOKEN, refreshToken)
         }
     }
 
-    val getToken: Flow<String?> = dataStore.data.map { preferences ->
-        val token = preferences[JWT_TOKEN_KEY]
-        Log.d("VaultTest", "ACTION: Read Token -> ${token?.take(15) ?: "VAULT IS EMPTY (NULL)"}")
-        token
-    }
+    // Retrieve tokens synchronously (Crucial for OkHttp)
+    fun getAccessToken(): String? = sharedPreferences.getString(KEY_ACCESS_TOKEN, null)
 
-    suspend fun clearToken() {
-        dataStore.edit { preferences ->
-            preferences.remove(JWT_TOKEN_KEY)
-            Log.d("VaultTest", "ACTION: Cleared Token")
-        }
+    fun getRefreshToken(): String? = sharedPreferences.getString(KEY_REFRESH_TOKEN, null)
+
+    fun clearTokens() {
+        sharedPreferences.edit { clear() }
     }
 }

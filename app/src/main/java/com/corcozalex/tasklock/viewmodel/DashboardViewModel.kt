@@ -16,8 +16,10 @@ import com.corcozalex.tasklock.network.RepeatMode
 import com.corcozalex.tasklock.network.Task
 import com.corcozalex.tasklock.network.TaskCreateRequest
 import com.corcozalex.tasklock.network.TaskMetadataCodec
+import com.corcozalex.tasklock.network.TaskUpdateRequest
 import com.corcozalex.tasklock.network.UserProfile
 import com.corcozalex.tasklock.receiver.AlarmReceiver
+import com.corcozalex.tasklock.scheduler.TaskAlarmScheduler
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -53,6 +55,7 @@ class DashboardViewModel : ViewModel() {
     }
 
     fun createTask(
+        context: Context,
         title: String,
         description: String,
         scheduledAtMillis: Long,
@@ -71,34 +74,85 @@ class DashboardViewModel : ViewModel() {
                     requiredObject = requiredObject
                 )
                 val request = TaskCreateRequest(title = title, description = descToSave)
-                NetworkClient.api.createTask(request)
+                val createdTask = NetworkClient.api.createTask(request)
+                TaskAlarmScheduler.scheduleTaskAlarm(context, createdTask)
                 fetchUserProfile()
             } catch (e: Exception) {
                 _uiState.value = DashboardState.Error("Failed to create task: ${e.message}")
             }
         }
     }
-    fun toggleTaskCompletion(task: Task) {
+
+    fun updateTask(
+        context: Context,
+        task: Task,
+        title: String,
+        description: String,
+        scheduledAtMillis: Long,
+        repeatMode: RepeatMode,
+        repeatDayOfWeek: Int?,
+        requiredObject: String
+    ) {
+        _uiState.value = DashboardState.Loading
         viewModelScope.launch {
             try {
-                val updatedTask = task.copy(is_completed = !task.is_completed)
-                NetworkClient.api.updateTask(task.id, updatedTask)
+                val descToSave = TaskMetadataCodec.encode(
+                    notes = description,
+                    scheduledAtMillis = scheduledAtMillis,
+                    repeatMode = repeatMode,
+                    repeatDayOfWeek = repeatDayOfWeek,
+                    requiredObject = requiredObject
+                )
+                val request = TaskUpdateRequest(
+                    title = title,
+                    description = descToSave,
+                    is_completed = task.is_completed
+                )
+                val updatedTask = NetworkClient.api.updateTask(task.id, request)
+                TaskAlarmScheduler.scheduleTaskAlarm(context, updatedTask)
                 fetchUserProfile()
             } catch (e: Exception) {
                 _uiState.value = DashboardState.Error("Failed to update task: ${e.message}")
             }
         }
     }
-    fun deleteTask(taskId: Int) {
+
+    fun toggleTaskCompletion(context: Context, task: Task) {
+        viewModelScope.launch {
+            try {
+                val request = TaskUpdateRequest(
+                    title = task.title,
+                    description = task.description,
+                    is_completed = !task.is_completed
+                )
+                val updatedTask = NetworkClient.api.updateTask(task.id, request)
+                if (updatedTask.is_completed) {
+                    TaskAlarmScheduler.cancelTaskAlarm(context, updatedTask.id)
+                } else {
+                    TaskAlarmScheduler.scheduleTaskAlarm(context, updatedTask)
+                }
+                fetchUserProfile()
+            } catch (e: Exception) {
+                _uiState.value = DashboardState.Error("Failed to update task: ${e.message}")
+            }
+        }
+    }
+
+    fun deleteTask(context: Context, taskId: Int) {
         _uiState.value = DashboardState.Loading
         viewModelScope.launch {
             try {
                 NetworkClient.api.deleteTask(taskId)
+                TaskAlarmScheduler.cancelTaskAlarm(context, taskId)
                 fetchUserProfile()
             } catch (e: Exception) {
                 _uiState.value = DashboardState.Error("Failed to delete task: ${e.message}")
             }
         }
+    }
+
+    fun syncTaskAlarms(context: Context, tasks: List<Task>) {
+        TaskAlarmScheduler.syncTaskAlarms(context, tasks)
     }
 
     fun scheduleTestAlarm(context: Context){

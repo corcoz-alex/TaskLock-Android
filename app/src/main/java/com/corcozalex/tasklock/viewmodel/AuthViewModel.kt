@@ -7,7 +7,6 @@ import androidx.lifecycle.viewModelScope
 import com.corcozalex.tasklock.network.NetworkClient
 import com.corcozalex.tasklock.network.RegisterRequest
 import com.corcozalex.tasklock.network.TokenManager
-import com.corcozalex.tasklock.network.dataStore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -21,24 +20,17 @@ sealed class AuthState {
 }
 
 class AuthViewModel(application: Application) : AndroidViewModel(application) {
-    // the memory vaults
     private val _authState = MutableStateFlow<AuthState>(AuthState.Idle)
     val authState: StateFlow<AuthState> = _authState.asStateFlow()
-    private val tokenManager = TokenManager(application.dataStore)
+    private val tokenManager = NetworkClient.tokenManager
 
-    // the action
     fun login(email: String, password: String) {
-        // instantly tell the ui to show a loading state
         _authState.value = AuthState.Loading
-
-        // launch a background thread so the app doesn't freeze
         viewModelScope.launch {
             try {
-                // fire the request to the server
                 val response = NetworkClient.api.login(email, password)
-                // Succes! Save the token in the vault
-                tokenManager.saveToken(response.access_token)
-                // Tell the UI we did it
+                // Save BOTH tokens securely
+                tokenManager.saveTokens(response.access_token, response.refresh_token)
                 _authState.value = AuthState.Success("Logged in successfully!")
             } catch (e: Exception) {
                 _authState.value = AuthState.Error(e.message ?: "Invalid credentials or network error")
@@ -47,11 +39,8 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
     }
 
     fun logout() {
-        // launch background thread
         viewModelScope.launch {
-            // Clear the vault
-            tokenManager.clearToken()
-            // Tell the UI we did it
+            tokenManager.clearTokens()
             _authState.value = AuthState.Idle
         }
     }

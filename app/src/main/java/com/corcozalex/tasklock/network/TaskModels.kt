@@ -11,3 +11,10 @@ data class TaskCreateRequest(
     val title: String,
     val description: String?
 )
+
+data class TaskUpdateRequest(
+    val title: String,
+    val description: String?,
+    val is_completed: Boolean
+)
+

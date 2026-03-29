@@ -33,7 +33,6 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import com.corcozalex.tasklock.network.NetworkClient
 import com.corcozalex.tasklock.network.TokenManager
-import com.corcozalex.tasklock.network.dataStore
 import com.corcozalex.tasklock.service.AlarmService
 import com.corcozalex.tasklock.ui.screens.AlarmActiveScreen
 import com.corcozalex.tasklock.ui.screens.DashboardScreen
@@ -47,15 +46,10 @@ import kotlinx.coroutines.flow.MutableStateFlow
 
 class MainActivity : ComponentActivity() {
     private val isAlarmTriggeredFlow = MutableStateFlow(false)
-    private val notificationPermissionLauncher =
-        registerForActivityResult(ActivityResultContracts.RequestPermission()) { }
-
-    // --- CATCH BACKGROUND INTENTS ---
-    override fun onNewIntent(intent: Intent) {
-        super.onNewIntent(intent)
-        setIntent(intent) // Forces the Activity to update its current intent
-        handleAlarmIntent(intent)
-        isAlarmTriggeredFlow.value = intent.getBooleanExtra("IS_ALARM_TRIGGERED", false)
+    private val permissionLauncher = registerForActivityResult(
+        ActivityResultContracts.RequestMultiplePermissions()
+    ) { _ ->
+        // handle denied permissions later if needed
     }
 
     // --- CATCH COLD-START INTENTS ---
@@ -64,25 +58,6 @@ class MainActivity : ComponentActivity() {
         NetworkClient.initialize(applicationContext)
         enableEdgeToEdge()
         requestPermissionsIfNeeded()
-
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-            setShowWhenLocked(true)
-            setTurnScreenOn(true)
-        } else {
-            @Suppress("DEPRECATION")
-            window.addFlags(
-                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-                        WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
-            )
-        }
-        window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-
-        // Check if the app was launched by the AlarmService
-        handleAlarmIntent(intent)
-
-        val initialAlarmTriggered = intent.getBooleanExtra("IS_ALARM_TRIGGERED", false)
-        isAlarmTriggeredFlow.value = initialAlarmTriggered
-        val initialRoute = if (initialAlarmTriggered) "alarm_active" else "splash"
 
         setContent {
             TaskLockTheme {
@@ -95,70 +70,26 @@ class MainActivity : ComponentActivity() {
 
                     val navController = rememberNavController()
                     val context = LocalContext.current
-                    val tokenManager = remember { TokenManager(context.dataStore) }
 
-                    val activity = context as? MainActivity
-                    val isAlarmTriggered by isAlarmTriggeredFlow.collectAsState()
-                    // Force the UI to hijack the screen if the alarm is triggered,
-                    // completely ignoring Compose's saved state.
-                    LaunchedEffect(isAlarmTriggered) {
-                        if (isAlarmTriggered) {
-                            navController.navigate("alarm_active") {
-                                // Wipe the backstack so the user cannot swipe back to escape the alarm!
-                                popUpTo(navController.graph.id) { inclusive = true }
-                            }
-                        }
-                    }
 
-                    NavHost(navController = navController, startDestination = initialRoute) {
+                    NavHost(navController = navController, startDestination = "splash") {
 
-                        // ROUTE: Alarm Screen
-                        composable("alarm_active") {
-                            AlarmActiveScreen(
-                                onEmergencyStop = {
-                                    // 1. Kill the audio
-                                    val stopIntent = Intent(context, AlarmService::class.java)
-                                    context.stopService(stopIntent)
-
-                                    // 2. Clear the screen flags so the phone can sleep again
-                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-                                        setShowWhenLocked(false)
-                                        setTurnScreenOn(false)
-                                    }
-                                    window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-
-                                    // 3. Reset the master switch and intent so it doesn't loop
-                                    activity?.intent?.removeExtra("IS_ALARM_TRIGGERED")
-                                    isAlarmTriggeredFlow.value = false
-
-                                    // 4. Navigate back to safety
-                                    navController.navigate("dashboard") {
-                                        popUpTo("alarm_active") { inclusive = true }
-                                    }
-                                }
-                            )
-                        }
 
                         // ROUTE: The Traffic Cop (Splash)
                         composable("splash") {
-                            val storedToken by tokenManager.getToken.collectAsState(initial = "CHECKING_VAULT")
-                            LaunchedEffect(storedToken) {
-                                if (storedToken != "CHECKING_VAULT") {
-                                    if (storedToken.isNullOrBlank()) {
-                                        navController.navigate("login") {
-                                            popUpTo("splash") {
-                                                inclusive = true
-                                            }
-                                        }
-                                    } else {
-                                        navController.navigate("dashboard") {
-                                            popUpTo("splash") {
-                                                inclusive = true
-                                            }
-                                        }
+                            LaunchedEffect(Unit) {
+                                val refreshToken = NetworkClient.tokenManager.getRefreshToken()
+                                if (!refreshToken.isNullOrBlank()) {
+                                    navController.navigate("dashboard") {
+                                        popUpTo("splash") { inclusive = true }
+                                    }
+                                } else {
+                                    navController.navigate("login") {
+                                        popUpTo("splash") { inclusive = true }
                                     }
                                 }
                             }
+                            // loading spinner
                             Box(
                                 modifier = Modifier.fillMaxSize(),
                                 contentAlignment = Alignment.Center
@@ -214,6 +145,19 @@ class MainActivity : ComponentActivity() {
                                 },
                                 onCreateTaskClick = { title, description, scheduledAtMillis, repeatMode, repeatDayOfWeek, requiredObject ->
                                     dashboardViewModel.createTask(
+                                        context,
+                                        title,
+                                        description,
+                                        scheduledAtMillis,
+                                        repeatMode,
+                                        repeatDayOfWeek,
+                                        requiredObject
+                                    )
+                                },
+                                onUpdateTaskClick = { task, title, description, scheduledAtMillis, repeatMode, repeatDayOfWeek, requiredObject ->
+                                    dashboardViewModel.updateTask(
+                                        context,
+                                        task,
                                         title,
                                         description,
                                         scheduledAtMillis,
@@ -224,10 +168,14 @@ class MainActivity : ComponentActivity() {
                                 },
                                 onToggleTaskClick = { task ->
                                     dashboardViewModel.toggleTaskCompletion(
+                                        context,
                                         task
                                     )
                                 },
-                                onDeleteTaskClick = { taskId -> dashboardViewModel.deleteTask(taskId) },
+                                onDeleteTaskClick = { taskId -> dashboardViewModel.deleteTask(context, taskId) },
+                                onSyncTaskAlarms = { tasks ->
+                                    dashboardViewModel.syncTaskAlarms(context, tasks)
+                                },
                                 onTestAlarmClick = { dashboardViewModel.scheduleTestAlarm(context) }
                             )
                         }
@@ -254,60 +202,21 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-    // --- THE WAKE-UP ENGINE ---
-    private fun handleAlarmIntent(intent: Intent?) {
-        if (intent?.getBooleanExtra("IS_ALARM_TRIGGERED", false) == true) {
-
-            // 1. Tell Compose to change the UI
-            isAlarmTriggeredFlow.value = true
-
-            // 2. Physically hijack the screen panel
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-                setShowWhenLocked(true)
-                setTurnScreenOn(true)
-
-                // Aggressively ask the OS to dismiss the lock screen
-                val keyguardManager = getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
-                keyguardManager.requestDismissKeyguard(this, null)
-            } else {
-                @Suppress("DEPRECATION")
-                window.addFlags(
-                    WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
-                            WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON
-                )
-            }
-            // 3. Keep the screen awake so the user can use the camera
-            window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        }
-    }
-
     private fun requestPermissionsIfNeeded() {
         val permissionsToRequest = mutableListOf<String>()
 
-        // 1. Check Camera Permission
-        if (ContextCompat.checkSelfPermission(
-                this,
-                Manifest.permission.CAMERA
-            ) != PackageManager.PERMISSION_GRANTED
-        ) {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
             permissionsToRequest.add(Manifest.permission.CAMERA)
         }
 
-        // 2. Check Notification Permission (Android 13+)
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-            if (ContextCompat.checkSelfPermission(
-                    this,
-                    Manifest.permission.POST_NOTIFICATIONS
-                ) != PackageManager.PERMISSION_GRANTED
-            ) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED) {
                 permissionsToRequest.add(Manifest.permission.POST_NOTIFICATIONS)
             }
         }
 
         if (permissionsToRequest.isNotEmpty()) {
-            // NOTE: You will need to change 'notificationPermissionLauncher' at the top of MainActivity
-            // to a generic 'permissionLauncher' that uses RequestMultiplePermissions() if you want to request both cleanly,
-            // but for a quick test, just prompting the user in the Android Settings manually works too.
+            permissionLauncher.launch(permissionsToRequest.toTypedArray())
         }
     }
 }

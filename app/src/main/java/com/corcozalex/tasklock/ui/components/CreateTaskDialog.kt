@@ -19,14 +19,24 @@ import java.util.Locale
 @OptIn(ExperimentalMaterial3Api::class)
 fun CreateTaskDialog(
     onDismiss: () -> Unit,
+    dialogTitle: String = "New Task",
+    confirmLabel: String = "Save",
+    initialTitle: String = "",
+    initialDescription: String = "",
+    initialScheduledAtMillis: Long? = null,
+    initialRepeatMode: RepeatMode = RepeatMode.NONE,
+    initialRepeatDayOfWeek: Int = Calendar.getInstance().get(Calendar.DAY_OF_WEEK),
+    initialRequiredObject: String = COMMON_REQUIRED_OBJECTS.firstOrNull() ?: "Object",
     onConfirm: (String, String, Long, RepeatMode, Int?, String) -> Unit
 ) {
     val context = LocalContext.current
-    var title by remember { mutableStateOf("") }
-    var description by remember { mutableStateOf("") }
-    var repeatMode by remember { mutableStateOf(RepeatMode.NONE) }
-    var repeatDayOfWeek by remember { mutableStateOf(Calendar.getInstance().get(Calendar.DAY_OF_WEEK)) }
-    var selectedObject by remember { mutableStateOf(COMMON_REQUIRED_OBJECTS.first()) }
+    var title by remember(initialTitle) { mutableStateOf(initialTitle) }
+    var description by remember(initialDescription) { mutableStateOf(initialDescription) }
+    var repeatMode by remember(initialRepeatMode) { mutableStateOf(initialRepeatMode) }
+    var repeatDayOfWeek by remember(initialRepeatDayOfWeek) { mutableStateOf(initialRepeatDayOfWeek) }
+    var selectedObject by remember(initialRequiredObject) {
+        mutableStateOf(initialRequiredObject.ifBlank { COMMON_REQUIRED_OBJECTS.firstOrNull() ?: "Object" })
+    }
     var objectMenuExpanded by remember { mutableStateOf(false) }
     var dayMenuExpanded by remember { mutableStateOf(false) }
 
@@ -37,7 +47,9 @@ fun CreateTaskDialog(
             set(Calendar.MILLISECOND, 0)
         }
     }
-    var selectedDateTimeMillis by remember { mutableStateOf(selectedDateTime.timeInMillis) }
+    var selectedDateTimeMillis by remember(initialScheduledAtMillis) {
+        mutableStateOf(initialScheduledAtMillis ?: selectedDateTime.timeInMillis)
+    }
 
     val dateLabel = remember(selectedDateTimeMillis) {
         SimpleDateFormat("EEE, MMM d, yyyy", Locale.getDefault())
@@ -60,9 +72,26 @@ fun CreateTaskDialog(
         )
     }
 
+    val selectorFieldColors = OutlinedTextFieldDefaults.colors(
+        focusedContainerColor = MaterialTheme.colorScheme.surface,
+        unfocusedContainerColor = MaterialTheme.colorScheme.surface,
+        disabledContainerColor = MaterialTheme.colorScheme.surface,
+        focusedBorderColor = MaterialTheme.colorScheme.primary,
+        unfocusedBorderColor = MaterialTheme.colorScheme.outline,
+        focusedLabelColor = MaterialTheme.colorScheme.primary,
+        unfocusedLabelColor = MaterialTheme.colorScheme.onSurfaceVariant,
+        focusedTextColor = MaterialTheme.colorScheme.onSurface,
+        unfocusedTextColor = MaterialTheme.colorScheme.onSurface
+    )
+    val dropdownItemColors = MenuDefaults.itemColors(
+        textColor = MaterialTheme.colorScheme.onSurface
+    )
+
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("New Task") },
+        containerColor = MaterialTheme.colorScheme.surface,
+        tonalElevation = 0.dp,
+        title = { Text(dialogTitle) },
         text = {
             Column(modifier = Modifier.fillMaxWidth()) {
                 OutlinedTextField(
@@ -136,21 +165,43 @@ fun CreateTaskDialog(
                 Spacer(modifier = Modifier.height(12.dp))
                 Text("Repeat", style = MaterialTheme.typography.labelLarge)
                 Spacer(modifier = Modifier.height(6.dp))
-                Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                val repeatChipColors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = MaterialTheme.colorScheme.secondaryContainer,
+                    selectedLabelColor = MaterialTheme.colorScheme.onSecondaryContainer
+                )
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
                     FilterChip(
                         selected = repeatMode == RepeatMode.NONE,
                         onClick = { repeatMode = RepeatMode.NONE },
+                        colors = repeatChipColors,
                         label = { Text("Once") }
                     )
                     FilterChip(
                         selected = repeatMode == RepeatMode.DAILY,
                         onClick = { repeatMode = RepeatMode.DAILY },
+                        colors = repeatChipColors,
                         label = { Text("Daily") }
                     )
                     FilterChip(
                         selected = repeatMode == RepeatMode.WEEKLY,
                         onClick = { repeatMode = RepeatMode.WEEKLY },
+                        colors = repeatChipColors,
                         label = { Text("Weekly") }
+                    )
+                }
+                Spacer(modifier = Modifier.height(8.dp))
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.Start
+                ) {
+                    FilterChip(
+                        selected = repeatMode == RepeatMode.MONTHLY,
+                        onClick = { repeatMode = RepeatMode.MONTHLY },
+                        colors = repeatChipColors,
+                        label = { Text("Monthly") }
                     )
                 }
 
@@ -164,18 +215,24 @@ fun CreateTaskDialog(
                             value = dayNameMap[repeatDayOfWeek].orEmpty(),
                             onValueChange = {},
                             readOnly = true,
+                            colors = selectorFieldColors,
                             label = { Text("Repeats on") },
                             modifier = Modifier
-                                .menuAnchor()
+                                .menuAnchor(
+                                    type = MenuAnchorType.PrimaryNotEditable,
+                                    enabled = true
+                                )
                                 .fillMaxWidth()
                                 .clickable { dayMenuExpanded = true }
                         )
                         ExposedDropdownMenu(
                             expanded = dayMenuExpanded,
+                            containerColor = MaterialTheme.colorScheme.surface,
                             onDismissRequest = { dayMenuExpanded = false }
                         ) {
                             dayNameMap.forEach { (day, label) ->
                                 DropdownMenuItem(
+                                    colors = dropdownItemColors,
                                     text = { Text(label) },
                                     onClick = {
                                         repeatDayOfWeek = day
@@ -196,18 +253,25 @@ fun CreateTaskDialog(
                         value = selectedObject,
                         onValueChange = {},
                         readOnly = true,
+                        colors = selectorFieldColors,
                         label = { Text("Required Object") },
                         modifier = Modifier
-                            .menuAnchor()
+                            .menuAnchor(
+                                type = MenuAnchorType.PrimaryNotEditable,
+                                enabled = true
+                            )
                             .fillMaxWidth()
                             .clickable { objectMenuExpanded = true }
                     )
                     ExposedDropdownMenu(
                         expanded = objectMenuExpanded,
+                        containerColor = MaterialTheme.colorScheme.surface,
                         onDismissRequest = { objectMenuExpanded = false }
                     ) {
-                        COMMON_REQUIRED_OBJECTS.forEach { item ->
+                        val objects = if (COMMON_REQUIRED_OBJECTS.isEmpty()) listOf("Object") else COMMON_REQUIRED_OBJECTS
+                        objects.forEach { item ->
                             DropdownMenuItem(
+                                colors = dropdownItemColors,
                                 text = { Text(item) },
                                 onClick = {
                                     selectedObject = item
@@ -234,7 +298,7 @@ fun CreateTaskDialog(
                 },
                 enabled = title.isNotBlank()
             ) {
-                Text("Save")
+                Text(confirmLabel)
             }
         },
         dismissButton = {

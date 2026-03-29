@@ -9,6 +9,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -24,6 +25,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.corcozalex.tasklock.network.RepeatMode
 import com.corcozalex.tasklock.network.Task
+import com.corcozalex.tasklock.network.TaskCompletionRules
 import com.corcozalex.tasklock.network.TaskMetadataCodec
 import java.text.SimpleDateFormat
 import java.util.Calendar
@@ -34,11 +36,13 @@ import java.util.Locale
 fun TaskCard(
     task: Task,
     onToggleEnabled: () -> Unit,
+    onEditClick: () -> Unit,
     onDeleteClick: () -> Unit
 ) {
     val metadata = TaskMetadataCodec.decode(task.description)
     val notes = TaskMetadataCodec.plainDescription(task.description)
-    val isEnabled = !task.is_completed
+    val isTemporarilyCompleted = metadata?.let { TaskCompletionRules.isTemporarilyCompleted(it) } == true
+    val isEnabled = !task.is_completed && !isTemporarilyCompleted
 
     val scheduleText = metadata?.let {
         val date = SimpleDateFormat("EEE, MMM d", Locale.getDefault()).format(Date(it.scheduledAtMillis))
@@ -59,6 +63,7 @@ fun TaskCard(
                 }
                 "Every $dayName"
             }
+            RepeatMode.MONTHLY -> "Monthly"
         }
         "$date at $time - $repeatSummary"
     }
@@ -78,7 +83,11 @@ fun TaskCard(
                 .padding(16.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Switch(checked = isEnabled, onCheckedChange = { onToggleEnabled() })
+            Switch(
+                checked = isEnabled,
+                enabled = !isTemporarilyCompleted,
+                onCheckedChange = { onToggleEnabled() }
+            )
             Spacer(modifier = Modifier.width(8.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
@@ -113,6 +122,21 @@ fun TaskCard(
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
+                if (isTemporarilyCompleted) {
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        text = "Completed for now",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+            IconButton(onClick = onEditClick) {
+                Icon(
+                    imageVector = Icons.Default.Edit,
+                    contentDescription = "Edit Task",
+                    tint = MaterialTheme.colorScheme.primary
+                )
             }
             IconButton(onClick = onDeleteClick) {
                 Icon(

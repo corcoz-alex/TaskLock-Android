@@ -6,7 +6,6 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -72,7 +71,7 @@ fun RegisterScreen(
         }
         Spacer(modifier = Modifier.height(16.dp))
         when (authState) {
-            is AuthState.Success -> Text(text = authState.message, color = Color(0xFF4CAF50), modifier = Modifier.padding(top = 8.dp))
+            is AuthState.Success -> Text(text = authState.message, color = MaterialTheme.colorScheme.tertiary, modifier = Modifier.padding(top = 8.dp))
             is AuthState.Error -> Text(text = authState.error, color = MaterialTheme.colorScheme.error, modifier = Modifier.padding(top = 8.dp))
             else -> {}
         }

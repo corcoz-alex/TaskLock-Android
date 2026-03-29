@@ -3,14 +3,21 @@ package com.corcozalex.tasklock.ui.screens
 import android.Manifest
 import android.content.pm.PackageManager
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.camera.core.CameraSelector
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -26,12 +33,12 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
 import com.corcozalex.tasklock.ui.components.CameraPreview
 
 @Composable
 fun AlarmActiveScreen(
+    onTaskCompleted: () -> Unit,
     onEmergencyStop: () -> Unit
 ) {
     val context = LocalContext.current
@@ -47,6 +54,7 @@ fun AlarmActiveScreen(
     var captureStatusMessage by remember { mutableStateOf<String?>(null) }
     var captureRequestCount by remember { mutableStateOf(0) }
     var isCapturing by remember { mutableStateOf(false) }
+    var lensFacing by remember { mutableStateOf(CameraSelector.LENS_FACING_BACK) }
 
     val cameraPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
@@ -64,118 +72,162 @@ fun AlarmActiveScreen(
     Column(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF121212))
-            .padding(24.dp),
+            .background(MaterialTheme.colorScheme.background)
+            .statusBarsPadding()
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.SpaceBetween
+        verticalArrangement = Arrangement.Top
     ) {
-        // Header Text
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(
+            horizontalAlignment = Alignment.CenterHorizontally,
+            modifier = Modifier.padding(top = 4.dp, bottom = 8.dp)
+        ) {
             Text(
                 text = "WAKE UP!",
-                fontSize = 48.sp,
-                fontWeight = FontWeight.Bold,
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.ExtraBold,
                 color = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.padding(bottom = 8.dp, top = 32.dp)
+                modifier = Modifier.padding(bottom = 6.dp)
             )
             Text(
                 text = "Time to go to the gym.\nTake a picture of your Toothbrush.",
-                fontSize = 18.sp,
-                color = Color.White,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurface,
                 textAlign = TextAlign.Center,
-                modifier = Modifier.padding(bottom = 24.dp)
+                modifier = Modifier.padding(bottom = 8.dp)
             )
         }
 
-        Box(
+        Card(
             modifier = Modifier
-                .weight(1f) // Takes up the remaining middle space
+                .weight(1f)
                 .fillMaxWidth()
-                .padding(vertical = 16.dp)
-                .clip(RoundedCornerShape(16.dp)) // Gives the camera smooth, rounded corners
-                .background(Color.Black)
+                .padding(vertical = 8.dp),
+            shape = RoundedCornerShape(24.dp),
+            colors = CardDefaults.cardColors(containerColor = Color.Black),
+            elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
         ) {
-            if (hasCameraPermission) {
-                CameraPreview(
-                    captureRequest = captureRequestCount,
-                    onCaptureStarted = {
-                        isCapturing = true
-                        cameraErrorMessage = null
-                        captureStatusMessage = null
-                    },
-                    onPhotoCaptured = {
-                        isCapturing = false
-                        captureStatusMessage = "Photo captured successfully."
-                    },
-                    onCameraError = { message ->
-                        isCapturing = false
-                        cameraErrorMessage = message
-                    }
-                )
-            } else {
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(16.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Text(
-                        text = "Camera permission is required to show the wake-up camera.",
-                        color = Color.White,
-                        textAlign = TextAlign.Center
+            Box(modifier = Modifier.fillMaxSize()) {
+                if (hasCameraPermission) {
+                    CameraPreview(
+                        lensFacing = lensFacing,
+                        captureRequest = captureRequestCount,
+                        onCaptureStarted = {
+                            isCapturing = true
+                            cameraErrorMessage = null
+                            captureStatusMessage = null
+                        },
+                        onPhotoCaptured = {
+                            isCapturing = false
+                            captureStatusMessage = "Photo captured successfully."
+                            onTaskCompleted()
+                        },
+                        onCameraError = { message ->
+                            isCapturing = false
+                            cameraErrorMessage = message
+                        }
                     )
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Button(onClick = { cameraPermissionLauncher.launch(Manifest.permission.CAMERA) }) {
-                        Text("Grant Camera Permission")
+
+                    OutlinedButton(
+                        onClick = {
+                            lensFacing = if (lensFacing == CameraSelector.LENS_FACING_BACK) {
+                                CameraSelector.LENS_FACING_FRONT
+                            } else {
+                                CameraSelector.LENS_FACING_BACK
+                            }
+                        },
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(12.dp),
+                        shape = RoundedCornerShape(50)
+                    ) {
+                        Text(if (lensFacing == CameraSelector.LENS_FACING_BACK) "Front" else "Back")
+                    }
+
+                    Surface(
+                        modifier = Modifier
+                            .align(Alignment.BottomCenter)
+                            .padding(bottom = 16.dp)
+                            .size(78.dp),
+                        shape = CircleShape,
+                        color = Color(0xAAFFFFFF)
+                    ) {
+                        FloatingActionButton(
+                            onClick = {
+                                if (!isCapturing) {
+                                    captureRequestCount += 1
+                                }
+                            },
+                            modifier = Modifier
+                                .padding(8.dp)
+                                .fillMaxSize()
+                                .border(2.dp, Color.White, CircleShape),
+                            shape = CircleShape,
+                            containerColor = if (isCapturing) Color(0xFF9AA7BA) else MaterialTheme.colorScheme.primary,
+                            contentColor = Color.White
+                        ) {
+                            Text(if (isCapturing) "..." else " ")
+                        }
+                    }
+                } else {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(16.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Text(
+                            text = "Camera permission is required to show the wake-up camera.",
+                            color = Color.White,
+                            textAlign = TextAlign.Center
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        Button(onClick = { cameraPermissionLauncher.launch(Manifest.permission.CAMERA) }) {
+                            Text("Grant Camera Permission")
+                        }
                     }
                 }
             }
         }
 
-        if (cameraErrorMessage != null) {
-            Text(
-                text = cameraErrorMessage!!,
-                color = MaterialTheme.colorScheme.error,
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 8.dp)
-            )
-        }
-
-        if (captureStatusMessage != null) {
-            Text(
-                text = captureStatusMessage!!,
-                color = Color(0xFF7CFF8B),
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 6.dp)
-            )
-        }
-
-        Button(
-            onClick = { captureRequestCount += 1 },
-            enabled = hasCameraPermission && !isCapturing,
+        Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(56.dp)
-                .padding(top = 12.dp)
+                .height(36.dp),
+            contentAlignment = Alignment.Center
         ) {
-            Text(if (isCapturing) "SNAPPING..." else "SNAP PICTURE")
+            when {
+                cameraErrorMessage != null -> {
+                    Text(
+                        text = cameraErrorMessage!!,
+                        color = MaterialTheme.colorScheme.error,
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+
+                captureStatusMessage != null -> {
+                    Text(
+                        text = captureStatusMessage!!,
+                        color = Color(0xFF4CAF50),
+                        textAlign = TextAlign.Center,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
         }
 
-        // Emergency Stop Button
         OutlinedButton(
             onClick = onEmergencyStop,
             colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
             modifier = Modifier
                 .fillMaxWidth()
-                .height(60.dp)
-                .padding(top = 8.dp, bottom = 16.dp)
+                .height(56.dp)
+                .padding(top = 8.dp, bottom = 8.dp),
+            shape = RoundedCornerShape(16.dp)
         ) {
-            Text("EMERGENCY STOP", fontSize = 18.sp, fontWeight = FontWeight.Bold)
+            Text("EMERGENCY STOP", fontWeight = FontWeight.Bold)
         }
     }
 }

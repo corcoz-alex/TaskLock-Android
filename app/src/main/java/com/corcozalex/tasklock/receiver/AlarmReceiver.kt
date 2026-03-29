@@ -6,6 +6,7 @@ import android.content.Intent
 import android.os.PowerManager
 import android.util.Log
 import com.corcozalex.tasklock.AlarmActivity
+import com.corcozalex.tasklock.scheduler.TaskAlarmScheduler
 import com.corcozalex.tasklock.service.AlarmService
 
 class AlarmReceiver : BroadcastReceiver() {
@@ -24,11 +25,14 @@ class AlarmReceiver : BroadcastReceiver() {
         val alarmIntent = Intent(context, AlarmActivity::class.java).apply {
             action = "ALARM_WAKE_UP_${System.currentTimeMillis()}"
             putExtra("IS_ALARM_TRIGGERED", true)
+            putExtras(intent)
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_SINGLE_TOP)
         }
         context.startActivity(alarmIntent)
 
         val serviceIntent = Intent(context, AlarmService::class.java)
         context.startForegroundService(serviceIntent)
+
+        TaskAlarmScheduler.rescheduleFromTrigger(context, intent)
     }
 }
