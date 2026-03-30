@@ -45,7 +45,7 @@ The standout feature is the physical verification system. It uses a custom Tenso
 
 The FastAPI backend is currently live and hosted on DigitalOcean. You do not need to build the Android project from source to evaluate the UI, the real-time network synchronization, or the physical ML object verification.
 
-1. **Download the App:** [Download TaskLock-v1.0.apk here](https://github.com/corcoz-alex/TaskLock-Android)
+1. **Download the App:** [Download TaskLock-v1.0.apk here](https://github.com/corcoz-alex/TaskLock-Android/blob/main/app/release/TaskLock-v1.0.apk)
 2. **Install on your Android device:** You may need to prompt your device to allow "Install from unknown sources."
 3. **Log in:** Bypass the registration flow using this dedicated test account:
    * **Email:** `testacc@test.com`
