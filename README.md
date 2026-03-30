@@ -59,7 +59,7 @@ Want to set up the API locally?
 
 1. **Clone the repo:**
    ```bash
-   git clone https://github.com/YOUR_USERNAME/tasklock-backend.git
+   git clone https://github.com/corcoz-alex/TaskLock-Backend.git
    cd tasklock-backend
    ```
 2. **Create a virtual environment and install dependencies**
