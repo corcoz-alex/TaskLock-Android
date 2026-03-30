@@ -45,11 +45,15 @@ class AuthViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
-    fun register(email: String, password: String){
+    fun register(email: String, password: String, confirmPassword: String){
+        if (password != confirmPassword) {
+            _authState.value = AuthState.Error("Passwords do not match.")
+            return
+        }
         _authState.value = AuthState.Loading
         viewModelScope.launch {
             try {
-                // pack the data into the RegisterRequest format
+                // pack the data into the RegisterRequest format (backend only needs one password)
                 val request = RegisterRequest(email, password)
                 // fire the request to the server
                 NetworkClient.api.register(request)

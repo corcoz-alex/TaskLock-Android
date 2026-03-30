@@ -184,10 +184,11 @@ class MainActivity : ComponentActivity() {
                         composable("register") {
                             RegisterScreen(
                                 authState = currentAuthState,
-                                onRegisterClick = { email, password ->
+                                onRegisterClick = { email, password, confirmPassword->
                                     authViewModel.register(
                                         email,
-                                        password
+                                        password,
+                                        confirmPassword
                                     )
                                 },
                                 onNavigateToLogin = {

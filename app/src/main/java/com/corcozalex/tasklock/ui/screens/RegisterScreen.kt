@@ -17,11 +17,12 @@ import com.corcozalex.tasklock.viewmodel.AuthState
 @Composable
 fun RegisterScreen(
     authState: AuthState,
-    onRegisterClick: (String, String) -> Unit,
+    onRegisterClick: (String, String, String) -> Unit,
     onNavigateToLogin: () -> Unit
 ) {
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
+    var confirmPassword by remember { mutableStateOf("") }
 
     val isLoading = authState is AuthState.Loading
 
@@ -55,13 +56,25 @@ fun RegisterScreen(
             modifier = Modifier.fillMaxWidth(),
             enabled = !isLoading,
             visualTransformation = PasswordVisualTransformation(),
+            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Next)
+        )
+        Spacer(modifier = Modifier.height(16.dp))
+        OutlinedTextField(
+            value = confirmPassword,
+            onValueChange = { confirmPassword = it },
+            label = { Text("Confirm Password")},
+            singleLine = true,
+            modifier = Modifier.fillMaxWidth(),
+            enabled = !isLoading,
+            visualTransformation = PasswordVisualTransformation(),
             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password, imeAction = ImeAction.Done)
         )
         Spacer(modifier = Modifier.height(32.dp))
         Button(
-            onClick = { onRegisterClick(email, password) },
+            onClick = { onRegisterClick(email, password, confirmPassword) },
             modifier = Modifier.fillMaxWidth().height(50.dp),
-            enabled = email.isNotBlank() && password.isNotBlank() && !isLoading
+            // require confirmPassword to be filled before enabling the button
+            enabled = email.isNotBlank() && password.isNotBlank() && confirmPassword.isNotBlank() && !isLoading
         ) {
             if (isLoading) {
                 CircularProgressIndicator(modifier = Modifier.size(24.dp), color = MaterialTheme.colorScheme.onPrimary, strokeWidth = 2.dp)
