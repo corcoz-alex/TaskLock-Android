@@ -25,13 +25,7 @@ val COMMON_REQUIRED_OBJECTS = listOf(
     "Toothbrush",
     "Backpack",
     "Laptop",
-    "Phone",
-    "Wallet",
-    "Keys",
-    "Water Bottle",
-    "Book",
     "Shoes",
-    "Mug"
 )
 
 object TaskMetadataCodec {

@@ -14,6 +14,7 @@ import com.corcozalex.tasklock.network.RepeatMode
 import com.corcozalex.tasklock.network.TaskCompletionRules
 import com.corcozalex.tasklock.network.TaskMetadataCodec
 import com.corcozalex.tasklock.network.TaskUpdateRequest
+import com.corcozalex.tasklock.scheduler.EXTRA_REQUIRED_OBJECT
 import com.corcozalex.tasklock.scheduler.EXTRA_TASK_DESCRIPTION
 import com.corcozalex.tasklock.scheduler.EXTRA_TASK_ID
 import com.corcozalex.tasklock.scheduler.EXTRA_TASK_TITLE
@@ -31,10 +32,13 @@ class AlarmActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         NetworkClient.initialize(applicationContext)
         configureAlarmWindow()
+        // extract the required object from the Intent that woke up the activity
+        val targetObj = intent.getStringExtra(EXTRA_REQUIRED_OBJECT) ?: "laptop"
 
         setContent {
             TaskLockTheme {
                 AlarmActiveScreen(
+                    targetObject = targetObj,
                     onTaskCompleted = { completeTriggeredTaskAndExit() },
                     onEmergencyStop = { completeTriggeredTaskAndExit() }
                 )
@@ -47,6 +51,16 @@ class AlarmActivity : ComponentActivity() {
         setIntent(intent)
         completionRequested = false
         configureAlarmWindow()
+        val newTargetObj = intent.getStringExtra(EXTRA_REQUIRED_OBJECT) ?: "laptop"
+        setContent {
+            TaskLockTheme {
+                AlarmActiveScreen(
+                    targetObject = newTargetObj,
+                    onTaskCompleted = { completeTriggeredTaskAndExit() },
+                    onEmergencyStop = { completeTriggeredTaskAndExit() }
+                )
+            }
+        }
     }
 
     private fun completeTriggeredTaskAndExit() {

@@ -1,0 +1,5 @@
+0 Toothbrush
+1 Backpack
+2 Laptop
+3 Shoes
+4 Background

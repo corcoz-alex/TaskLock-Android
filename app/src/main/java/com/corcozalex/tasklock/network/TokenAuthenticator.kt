@@ -13,7 +13,7 @@ class TokenAuthenticator(
         synchronized(this) {
             val currentAccessToken = tokenManager.getAccessToken() ?: return null
 
-            // If the token in the failed request is DIFFERENT from the one in the vault,
+            // If the token in the failed request is different from the one in the vault,
             // it means another thread already refreshed it. Just retry with the new token.
             val requestHeader = response.request.header("Authorization")
             if (requestHeader != null && !requestHeader.contains(currentAccessToken)) {
@@ -24,7 +24,7 @@ class TokenAuthenticator(
 
             val refreshToken = tokenManager.getRefreshToken() ?: return null
 
-            // 1. Make the synchronous call to your FastAPI backend
+            // 1. Make the synchronous call to fastAPI backend
             val refreshResponse = NetworkClient.api.refreshTokenSync(
                 TokenRefreshRequest(refreshToken)
             ).execute()

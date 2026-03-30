@@ -130,25 +130,30 @@ object TaskAlarmScheduler {
     ): Long? {
         val base = Calendar.getInstance().apply { timeInMillis = scheduledAtMillis }
 
+        val evalStartTime = maxOf(nowMillis, scheduledAtMillis)
+
         return when (repeatMode) {
             RepeatMode.NONE -> scheduledAtMillis.takeIf { it > nowMillis }
+
             RepeatMode.DAILY -> {
                 val candidate = Calendar.getInstance().apply {
-                    timeInMillis = nowMillis
+                    timeInMillis = evalStartTime
                     set(Calendar.HOUR_OF_DAY, base.get(Calendar.HOUR_OF_DAY))
                     set(Calendar.MINUTE, base.get(Calendar.MINUTE))
                     set(Calendar.SECOND, base.get(Calendar.SECOND))
                     set(Calendar.MILLISECOND, base.get(Calendar.MILLISECOND))
                 }
+
                 if (candidate.timeInMillis <= nowMillis) {
                     candidate.add(Calendar.DAY_OF_YEAR, 1)
                 }
                 candidate.timeInMillis
             }
+
             RepeatMode.WEEKLY -> {
                 val targetDay = repeatDayOfWeek ?: base.get(Calendar.DAY_OF_WEEK)
                 val candidate = Calendar.getInstance().apply {
-                    timeInMillis = nowMillis
+                    timeInMillis = evalStartTime
                     set(Calendar.HOUR_OF_DAY, base.get(Calendar.HOUR_OF_DAY))
                     set(Calendar.MINUTE, base.get(Calendar.MINUTE))
                     set(Calendar.SECOND, base.get(Calendar.SECOND))
@@ -162,9 +167,10 @@ object TaskAlarmScheduler {
                 candidate.add(Calendar.DAY_OF_YEAR, dayOffset)
                 candidate.timeInMillis
             }
+
             RepeatMode.MONTHLY -> {
                 val candidate = Calendar.getInstance().apply {
-                    timeInMillis = nowMillis
+                    timeInMillis = evalStartTime // Anchor to the future date if applicable
                     val baseDay = base.get(Calendar.DAY_OF_MONTH)
                     set(Calendar.DAY_OF_MONTH, baseDay.coerceAtMost(getActualMaximum(Calendar.DAY_OF_MONTH)))
                     set(Calendar.HOUR_OF_DAY, base.get(Calendar.HOUR_OF_DAY))
@@ -172,6 +178,7 @@ object TaskAlarmScheduler {
                     set(Calendar.SECOND, base.get(Calendar.SECOND))
                     set(Calendar.MILLISECOND, base.get(Calendar.MILLISECOND))
                 }
+
                 if (candidate.timeInMillis <= nowMillis) {
                     candidate.add(Calendar.MONTH, 1)
                     val baseDay = base.get(Calendar.DAY_OF_MONTH)

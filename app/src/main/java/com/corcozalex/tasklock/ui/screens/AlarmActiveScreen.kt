@@ -15,6 +15,7 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.FloatingActionButton
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
@@ -35,9 +36,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.corcozalex.tasklock.ui.components.CameraPreview
+import kotlin.math.max
 
 @Composable
 fun AlarmActiveScreen(
+    targetObject: String = "laptop",
     onTaskCompleted: () -> Unit,
     onEmergencyStop: () -> Unit
 ) {
@@ -55,6 +58,9 @@ fun AlarmActiveScreen(
     var captureRequestCount by remember { mutableStateOf(0) }
     var isCapturing by remember { mutableStateOf(false) }
     var lensFacing by remember { mutableStateOf(CameraSelector.LENS_FACING_BACK) }
+    var currentAiLabels by remember { mutableStateOf<List<String>>(emptyList()) }
+    val framesRequired = 15
+    var consecutiveHits by remember { mutableStateOf(0) }
 
     val cameraPermissionLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.RequestPermission()
@@ -90,10 +96,11 @@ fun AlarmActiveScreen(
                 modifier = Modifier.padding(bottom = 6.dp)
             )
             Text(
-                text = "Time to go to the gym.\nTake a picture of your Toothbrush.",
+                text = "Point your camera at a:\n${targetObject.uppercase()}",
                 style = MaterialTheme.typography.bodyLarge,
                 color = MaterialTheme.colorScheme.onSurface,
                 textAlign = TextAlign.Center,
+                fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(bottom = 8.dp)
             )
         }
@@ -110,22 +117,40 @@ fun AlarmActiveScreen(
             Box(modifier = Modifier.fillMaxSize()) {
                 if (hasCameraPermission) {
                     CameraPreview(
+                        targetObject = targetObject,
                         lensFacing = lensFacing,
-                        captureRequest = captureRequestCount,
-                        onCaptureStarted = {
-                            isCapturing = true
-                            cameraErrorMessage = null
-                            captureStatusMessage = null
-                        },
-                        onPhotoCaptured = {
-                            isCapturing = false
-                            captureStatusMessage = "Photo captured successfully."
-                            onTaskCompleted()
+                        onLabelsDetected = { labels ->
+                            currentAiLabels = labels
+                            if (labels.contains(targetObject.lowercase())) {
+                                consecutiveHits++
+                                if (consecutiveHits >= framesRequired) {
+                                    onTaskCompleted()
+                                }
+                            } else {
+                                consecutiveHits = max(0, consecutiveHits - 1)
+                            }
                         },
                         onCameraError = { message ->
-                            isCapturing = false
                             cameraErrorMessage = message
                         }
+                    )
+
+                    val boxWidth = if (targetObject.lowercase() == "toothbrush") 140.dp else 300.dp
+                    val boxHeight = if (targetObject.lowercase() == "toothbrush") 360.dp else 300.dp
+
+                    // target box
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .width(boxWidth)
+                            .height(boxHeight)
+                            .border(
+                                width = 4.dp,
+                                color = if (consecutiveHits > 0) Color(0xFF4CAF50) else Color.White.copy(
+                                    alpha = 0.5f
+                                ),
+                                shape = RoundedCornerShape(16.dp)
+                            )
                     )
 
                     OutlinedButton(
@@ -142,32 +167,6 @@ fun AlarmActiveScreen(
                         shape = RoundedCornerShape(50)
                     ) {
                         Text(if (lensFacing == CameraSelector.LENS_FACING_BACK) "Front" else "Back")
-                    }
-
-                    Surface(
-                        modifier = Modifier
-                            .align(Alignment.BottomCenter)
-                            .padding(bottom = 16.dp)
-                            .size(78.dp),
-                        shape = CircleShape,
-                        color = Color(0xAAFFFFFF)
-                    ) {
-                        FloatingActionButton(
-                            onClick = {
-                                if (!isCapturing) {
-                                    captureRequestCount += 1
-                                }
-                            },
-                            modifier = Modifier
-                                .padding(8.dp)
-                                .fillMaxSize()
-                                .border(2.dp, Color.White, CircleShape),
-                            shape = CircleShape,
-                            containerColor = if (isCapturing) Color(0xFF9AA7BA) else MaterialTheme.colorScheme.primary,
-                            contentColor = Color.White
-                        ) {
-                            Text(if (isCapturing) "..." else " ")
-                        }
                     }
                 } else {
                     Column(
@@ -191,30 +190,63 @@ fun AlarmActiveScreen(
             }
         }
 
+        val progress = (consecutiveHits.toFloat() / framesRequired.toFloat()).coerceIn(0f, 1f)
+
         Box(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(36.dp),
+                .height(48.dp),
             contentAlignment = Alignment.Center
         ) {
-            when {
-                cameraErrorMessage != null -> {
+            if (progress > 0f) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
-                        text = cameraErrorMessage!!,
-                        color = MaterialTheme.colorScheme.error,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth()
+                        text = "Locking on...",
+                        color = MaterialTheme.colorScheme.primary,
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(bottom = 4.dp)
+                    )
+                    LinearProgressIndicator(
+                        progress = { progress },
+                        modifier = Modifier
+                            .fillMaxWidth(0.8f)
+                            .height(12.dp)
+                            .clip(RoundedCornerShape(50)),
+                        color = MaterialTheme.colorScheme.primary,
+                        trackColor = MaterialTheme.colorScheme.surfaceVariant
                     )
                 }
+            } else if (cameraErrorMessage != null) {
+                Text(
+                    text = cameraErrorMessage!!,
+                    color = MaterialTheme.colorScheme.error,
+                    textAlign = TextAlign.Center
+                )
+            }
+        }
 
-                captureStatusMessage != null -> {
-                    Text(
-                        text = captureStatusMessage!!,
-                        color = Color(0xFF4CAF50),
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.fillMaxWidth()
-                    )
-                }
+        // AI debugging card
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 8.dp),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant)
+        ) {
+            Column(modifier = Modifier.padding(16.dp).fillMaxWidth()) {
+                Text(
+                    text = "AI is currently seeing:",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    text = if (currentAiLabels.isEmpty()) "Scanning..." else currentAiLabels.joinToString(
+                        ", "
+                    ),
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.primary
+                )
             }
         }
 
