@@ -6,6 +6,10 @@ TaskLock is a productivity and task management system with a twist: it forces yo
 
 This project pairs a native Android frontend with a Python FastAPI backend.
 
+##  Repositories
+* **Backend API:** [TaskLock Backend](https://github.com/corcoz-alex/TaskLock-Backend)
+* **Android Client:** *(This repository)*
+
 ## AI-Powered Wake Up
 The standout feature is the physical verification system. It uses a custom TensorFlow Lite model running locally on the device via Google ML Kit.
 * It intercepts the morning alarm using Android's `AlarmManager` and `Foreground Services` to bypass deep sleep (Doze) and the lock screen.
@@ -37,9 +41,14 @@ The standout feature is the physical verification system. It uses a custom Tenso
 * **Security:** Bcrypt (Passlib), PyJWT (OAuth2 Password Bearer)
 * **Hosting:** DigitalOcean VPS + Uvicorn
 
-##  Repositories
-* **Backend API:** [TaskLock Backend](https://github.com/corcoz-alex/TaskLock-Backend)
-* **Android Client:** *(This repository)*
+## What's Next?
+
+TaskLock is a work in progress. Here are the immediate features planned for the future:
+
+* **Expanded Object Recognition:** Training the ML model to recognize a wider variety of everyday items to keep the morning routine unpredictable.
+* **Offline Reliability:** Implementing local caching so alarms and ML verification trigger even if the device loses Wi-Fi connection overnight.
+* **"Roommate Mode":** A temporary 'hush' feature that mutes the loud alarm for 15-30 seconds, giving the user just enough time to walk to the bathroom or kitchen to scan their object without waking up the whole house.
+* **Anti-Cheat Mechanics:** Redesigning the Emergency Stop button to require a complex interaction (like holding for 10 seconds or solving a math problem) to prevent users from easily bypassing the physical scan when sleepy.
 
 ## Download & Test
 
